@@ -1,9 +1,7 @@
 CS152 Project Phase 3 - Code Generation
 ========================================
 
-[Home Page - Phase3 Code Generation Part1](https://www.cs.ucr.edu/~dtan004/proj3/phase3_code_generator.html)
-
-[Home Page - Phase3 Code Generation Part2](https://www.cs.ucr.edu/~dtan004/proj4/phase3_code_generator.html)
+[Home Page - Phase3 Code Generation](https://cs152-ucr-gupta.github.io/website/phase3_code_generator.html)
 
 
 ## Tools preparation
