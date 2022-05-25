@@ -19,10 +19,16 @@
   bool identifiers_are_params;
   std::vector<std::string> identifier_list;
   struct expression {
-          std::string* code;
-          std::string* temp;
+    std::string* code;
+    std::string* temp;
   };
   std::vector<expression> expression_list;
+  struct var {
+    std::string* identifier;
+    std::string* expression_code;
+    std::string* expression_temp;
+  };
+  std::vector<var> var_list;
   
   enum Type { Integer, Array };
   struct Symbol {
@@ -83,14 +89,20 @@
     out << text;
   }
 
+  bool is_valid_identifier_character(char c) {
+          return (c == '_' || c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z');
+  }
+
   void trim_identifier(std::string& identifier) {
-    while (identifier.back() < '0' || identifier.back() > '9' && identifier.back() < 'A' || identifier.back() > 'Z' && identifier.back() < 'a' || identifier.back() > 'z') {
-      identifier.pop_back();
+    int index = 0;
+    while (index + 1 < identifier.length() && is_valid_identifier_character(identifier[index + 1])) {
+      index++;
     }
+    identifier = identifier.substr(0, index + 1);
   }
 
   std::string get_next_temp() {
-          return "temp" + std::to_string(++temp_counter);
+    return "temp" + std::to_string(++temp_counter);
   }
 %}
 
@@ -212,11 +224,19 @@ Declaration: Multi-Ident COLON ENUM L_PAREN Multi-Ident R_PAREN
 
 Multi-Var: Multi-Var COMMA Var
         { 
-                printf("Var -> Var COMMA Multi-Var\n"); 
+                var new_var;
+                new_var.identifier = $3.identifier;
+                new_var.expression_code = $3.expression_code;
+                new_var.expression_temp = $3.expression_temp;
+                var_list.push_back(new_var);
         }
         | Var 
         {
-                printf("Multi-Var -> Var\n"); 
+                var new_var;
+                new_var.identifier = $1.identifier;
+                new_var.expression_code = $1.expression_code;
+                new_var.expression_temp = $1.expression_temp;
+                var_list.push_back(new_var);
         }
         ;
 
@@ -232,7 +252,8 @@ Multi-Statement: Multi-Statement Statement SEMICOLON
 
 Statement: Var ASSIGN Expression 
         {
-                printf("Statement -> Var ASSIGN Expression\n");
+                output(*($3.code));
+                output("= " + *($1.identifier) + ", " + *($3.temp) + "\n");
         }
         | IF Bool-Expr THEN Multi-Statement ENDIF 
         {
@@ -254,9 +275,19 @@ Statement: Var ASSIGN Expression
         {
                 printf("Statement -> READ Multi-Var\n");
         }
-        | WRITE Multi-Var 
+        | WRITE {var_list.clear();} Multi-Var 
         {
-                printf("Statement -> WRITE Multi-Var\n");
+                for (var v : var_list) {
+                        if (v.expression_code) {
+                                output(*(v.expression_code));
+                                output(".[]> " + *(v.identifier) + ", " + *(v.expression_temp) + "\n");
+                                delete v.expression_code;
+                                delete v.expression_temp;
+                        } else {
+                                output(".> " + *(v.identifier) + "\n");
+                        }
+                        delete v.identifier;
+                }
         }
         | CONTINUE 
         {
@@ -340,14 +371,14 @@ Multi-Expression: Multi-Expression COMMA Expression
         {
                 expression new_expression;
                 new_expression.code = $3.code;
-                new_expression.code = $3.temp;
+                new_expression.temp = $3.temp;
                 expression_list.push_back(new_expression);
         }
         | Expression 
         {
                 expression new_expression;
                 new_expression.code = $1.code;
-                new_expression.code = $1.temp;
+                new_expression.temp = $1.temp;
                 expression_list.push_back(new_expression);
         }
         ;
@@ -363,6 +394,7 @@ Expression: Multiplicative-Expr
                 std::string temp = get_next_temp();
                 str += *($1.code);
                 str += *($3.code);
+                str += ". " + temp + "\n";
                 str += "+ " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
@@ -377,6 +409,7 @@ Expression: Multiplicative-Expr
                 std::string temp = get_next_temp();
                 str += *($1.code);
                 str += *($3.code);
+                str += ". " + temp + "\n";
                 str += "- " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
@@ -398,6 +431,7 @@ Multiplicative-Expr: Term
                 std::string temp = get_next_temp();
                 str += *($1.code);
                 str += *($3.code);
+                str += ". " + temp + "\n";
                 str += "* " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
@@ -412,6 +446,7 @@ Multiplicative-Expr: Term
                 std::string temp = get_next_temp();
                 str += *($1.code);
                 str += *($3.code);
+                str += ". " + temp + "\n";
                 str += "/ " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
@@ -426,6 +461,7 @@ Multiplicative-Expr: Term
                 std::string temp = get_next_temp();
                 str += *($1.code);
                 str += *($3.code);
+                str += ". " + temp + "\n";
                 str += "% " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
