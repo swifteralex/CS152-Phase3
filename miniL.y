@@ -106,14 +106,6 @@
     std::string* code;
     std::string* temp;
   } expression_data;
-  struct {
-    std::vector<std::string>* expression_codes;
-    std::vector<std::string>* expression_temps;
-  } multi_expression_data;
-  struct {
-    std::string* code;
-    std::string* temp;
-  } term_data;
 }
 
 %error-verbose
@@ -140,8 +132,8 @@
 %right ASSIGN
 %type <var_data> Var
 %type <expression_data> Expression
-%type <term_data> Term
-%type <multi_expression_data> Multi-Expression
+%type <expression_data> Multiplicative-Expr
+%type <expression_data> Term
 
 %% 
 
@@ -362,33 +354,85 @@ Multi-Expression: Multi-Expression COMMA Expression
 
 Expression: Multiplicative-Expr 
         {
-                printf("Expression -> Multiplicative-Expr\n");
+                $$.code = $1.code;
+                $$.temp = $1.temp;
         }
         | Multiplicative-Expr ADD Expression 
         {
-                printf("Expression -> Multiplicative-Expr ADD Expression\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += "+ " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         | Multiplicative-Expr SUB Expression 
         {
-                printf("Expression -> Multiplicative-Expr SUB Expression\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += "- " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         ;
 
 Multiplicative-Expr: Term 
         {
-                printf("Multiplicative-Expr -> Term\n");
+                $$.code = $1.code;
+                $$.temp = $1.temp;
         }
         | Term MULT Term 
         {
-                printf("Multiplicative-Expr -> Term MULT Term\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += "* " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         | Term DIV Term 
         {
-                printf("Multiplicative-Expr -> Term DIV Term\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += "/ " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         | Term MOD Term 
         {
-                printf("Multiplicative-Expr -> Term MOD Term\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += "% " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         ;
 
