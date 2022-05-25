@@ -15,7 +15,7 @@
   void yyerror(const char *msg);
   int temp_counter = 0;
 
-  // Global variables used for inheritance or non-trivial synthesis
+  ////// Global variables used for inheritance or non-trivial synthesis //////
   bool identifiers_are_params;
   std::vector<std::string> identifier_list;
   struct expression {
@@ -29,6 +29,7 @@
     std::string* expression_temp;
   };
   std::vector<var> var_list;
+  ////////////////////////////////////////////////////////////////////////////
   
   enum Type { Integer, Array };
   struct Symbol {
@@ -159,9 +160,38 @@ Program: Program Function
         }
         ;
 
-Multi-Declaration: Multi-Declaration {identifier_list.clear();} Declaration SEMICOLON
+Multi-Ident: Multi-Ident COMMA IDENT
         { 
-                printf("Multi-Declaration -> Declaration SEMICOLON Multi-Declaration\n");
+                identifier_list.push_back($3);
+        }
+        | IDENT 
+        { 
+                identifier_list.push_back($1);
+        }
+        ;
+
+Multi-Declaration: Multi-Declaration {identifier_list.clear();} Multi-Ident COLON ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
+        { 
+                // TODO
+        }
+        | Multi-Declaration Multi-Ident COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER SEMICOLON
+        { 
+                for (int i = 0; i < identifier_list.size(); i++) {
+                        std::string identifier = identifier_list[i];
+                        add_variable_to_symbol_table(identifier, Array);
+                        output(".[] " + identifier + ", " + std::to_string($6) + "\n");
+                }
+        }
+        | Multi-Declaration Multi-Ident COLON INTEGER SEMICOLON
+        { 
+                for (int i = 0; i < identifier_list.size(); i++) {
+                        std::string identifier = identifier_list[i];
+                        add_variable_to_symbol_table(identifier, Integer);
+                        output(". " + identifier + "\n");
+                        if (identifiers_are_params) { 
+                                output("= " + identifier + ", $" + std::to_string(i) + "\n");
+                        }
+                }
         }
         | /*epsilon*/
         { 
@@ -184,41 +214,6 @@ Function: FUNCTION IDENT
         Multi-Declaration END_LOCALS BEGIN_BODY Multi-Statement END_BODY 
         { 
                 output("endfunc\n\n"); 
-        }
-        ;
-
-Multi-Ident: Multi-Ident COMMA IDENT
-        { 
-                identifier_list.push_back($3);
-        }
-        | IDENT 
-        { 
-                identifier_list.push_back($1);
-        }
-        ;
-
-Declaration: Multi-Ident COLON ENUM L_PAREN Multi-Ident R_PAREN
-        { 
-                // TODO
-        }
-        | Multi-Ident COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
-        { 
-                for (int i = 0; i < identifier_list.size(); i++) {
-                        std::string identifier = identifier_list[i];
-                        add_variable_to_symbol_table(identifier, Array);
-                        output(".[] " + identifier + ", " + std::to_string($5) + "\n");
-                }
-        }
-        | Multi-Ident COLON INTEGER 
-        { 
-                for (int i = 0; i < identifier_list.size(); i++) {
-                        std::string identifier = identifier_list[i];
-                        add_variable_to_symbol_table(identifier, Integer);
-                        output(". " + identifier + "\n");
-                        if (identifiers_are_params) { 
-                                output("= " + identifier + ", $" + std::to_string(i) + "\n");
-                        }
-                }
         }
         ;
 
@@ -512,6 +507,7 @@ Term: Var
                         str += ". " + temp + "\n";
                         str += "=[] " + temp + ", " + *($2.identifier) + ", " + *($2.expression_temp) + "\n";
                         std::string temp2 = get_next_temp();
+                        str += ". " + temp2 + "\n";
                         str += "- " + temp2 + ", 0, " + temp + "\n";
                         $$.code = new std::string(str);
                         $$.temp = new std::string(temp2);
@@ -556,6 +552,7 @@ Term: Var
                 std::string str;
                 std::string temp = get_next_temp();
                 str += *($3.code);
+                str += ". " + temp + "\n";
                 str += "- " + temp + ", 0, " + *($3.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
