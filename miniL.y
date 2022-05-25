@@ -542,7 +542,7 @@ Term: Var
                 std::string str;
                 std::string temp = get_next_temp();
                 str += ". " + temp + "\n";
-                str += "= " + temp + ", " + std::to_string(-$2) + "\n";
+                str += "- " + temp + ", " + "0, " + std::to_string($2) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
         }
