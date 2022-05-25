@@ -253,7 +253,17 @@ Multi-Statement: Multi-Statement Statement SEMICOLON
 Statement: Var ASSIGN Expression 
         {
                 output(*($3.code));
-                output("= " + *($1.identifier) + ", " + *($3.temp) + "\n");
+                if ($1.expression_code) {
+                        output(*($1.expression_code));
+                        output("[]= " + *($1.identifier) + ", " + *($1.expression_temp) + ", " + *($3.temp) + "\n");
+                        delete $1.expression_code;
+                        delete $1.expression_temp;
+                } else {
+                        output("= " + *($1.identifier) + ", " + *($3.temp) + "\n");
+                }
+                delete $1.identifier;
+                delete $3.code;
+                delete $3.temp;
         }
         | IF Bool-Expr THEN Multi-Statement ENDIF 
         {
