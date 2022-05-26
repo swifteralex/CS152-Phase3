@@ -31,6 +31,16 @@
     std::string* expression_temp;
   };
   std::vector<var> var_list;
+  std::vector<std::string*> statement_list;
+  std::string* read_statement_list() {
+    std::string str;
+    for (std::string* statement : statement_list) {
+      str += (*statement);
+      delete statement;
+    }
+    statement_list.clear();
+    return new std::string(str);
+  }
   ////////////////////////////////////////////////////////////////////////////
   
   enum Type { Integer, Array };
@@ -43,7 +53,7 @@
     std::vector<Symbol> declarations;
   };
 
-  std::vector <Function> symbol_table;
+  std::vector<Function> symbol_table;
 
   Function* get_function() {
     int last = symbol_table.size()-1;
@@ -93,7 +103,7 @@
   }
 
   bool is_valid_identifier_character(char c) {
-          return (c == '_' || c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z');
+    return (c == '_' || c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z');
   }
 
   void trim_identifier(std::string& identifier) {
@@ -125,6 +135,14 @@
     std::string* code;
     std::string* temp;
   } expression_data;
+  struct {
+    std::string* code;
+  } statement_data;
+  struct {
+    std::string* statement_code;
+    std::string* expression_code;
+    std::string* expression_temp;
+  } if_helper_data;
 }
 
 %error-verbose
@@ -157,17 +175,14 @@
 %type <expression_data> Relation-Expr
 %type <numval> Comp
 %type <expression_data> Relation-And-Expr
+%type <statement_data> Statement
+%type <statement_data> Multi-Statement
+%type <if_helper_data> If-Helper
 
 %% 
 
 Program: Program Function 
-        { 
-                printf("Program -> Program FUNCTION\n"); 
-        }
         | /*epsilon*/ 
-        { 
-                printf("Program -> epsilon\n"); 
-        }
         ;
 
 Multi-Ident: Multi-Ident COMMA IDENT
@@ -195,8 +210,10 @@ Function: FUNCTION IDENT
         {
                 identifiers_are_params = false;
         }
-        Multi-Declaration END_LOCALS BEGIN_BODY Multi-Statement END_BODY 
+        Multi-Declaration END_LOCALS BEGIN_BODY Multi-Statement {$14.code = read_statement_list();} END_BODY 
         { 
+                output(*($14.code));
+                delete $14.code;
                 std::string str = $2;
                 trim_identifier(str);
                 if (str != "main") {
@@ -256,72 +273,87 @@ Multi-Var: Multi-Var COMMA Var
 
 Multi-Statement: Multi-Statement Statement SEMICOLON
         {
-                printf("Multi-Statement -> Statement SEMICOLON Multi-Statement\n");
+                statement_list.push_back($2.code);
         }
         | Statement SEMICOLON 
         {
-                printf("Multi-Statement -> Statement SEMICOLON\n");
+                statement_list.push_back($1.code);
+        }
+        ;
+
+If-Helper: IF Bool-Expr THEN Multi-Statement 
+        {
+                $4.code = read_statement_list();
+                $$.statement_code = $4.code;
+                $$.expression_code = $2.code;
+                $$.expression_temp = $2.temp;
         }
         ;
 
 Statement: Var ASSIGN Expression 
         {
-                output(*($3.code));
+                std::string str;
+                str += *($3.code);
                 if ($1.expression_code) {
-                        output(*($1.expression_code));
-                        output("[]= " + *($1.identifier) + ", " + *($1.expression_temp) + ", " + *($3.temp) + "\n");
+                        str += *($1.expression_code);
+                        str += "[]= " + *($1.identifier) + ", " + *($1.expression_temp) + ", " + *($3.temp) + "\n";
                         delete $1.expression_code;
                         delete $1.expression_temp;
                 } else {
-                        output("= " + *($1.identifier) + ", " + *($3.temp) + "\n");
+                        str += "= " + *($1.identifier) + ", " + *($3.temp) + "\n";
                 }
+                $$.code = new std::string(str);
                 delete $1.identifier;
                 delete $3.code;
                 delete $3.temp;
         }
-        | IF Bool-Expr THEN Multi-Statement ENDIF 
+        | If-Helper ENDIF 
         {
                 printf("Statement -> IF Bool-Expr THEN Multi-Statement ENDIF\n");
         }
-        | IF Bool-Expr THEN Multi-Statement ELSE Multi-Statement ENDIF 
+        | If-Helper ELSE Multi-Statement {$3.code = read_statement_list();} ENDIF 
         {
                 printf("Statement -> IF Bool-Expr THEN Multi-Statement ELSE Multi-Statement ENDIF\n");
         }
-        | WHILE Bool-Expr BEGINLOOP Multi-Statement ENDLOOP 
+        | WHILE Bool-Expr BEGINLOOP Multi-Statement {$4.code = read_statement_list();} ENDLOOP 
         {
                 printf("Statement -> WHILE Bool-Expr BEGINLOOP Multi-Statement ENDLOOP\n");
         }
-        | DO BEGINLOOP Multi-Statement ENDLOOP WHILE Bool-Expr 
+        | DO BEGINLOOP Multi-Statement {$3.code = read_statement_list();} ENDLOOP WHILE Bool-Expr 
         {      
                 printf("Statement -> DO BEGINLOOP Multi-Statement ENDLOOP WHILE Bool-Expr\n");
         }
         | READ {var_list.clear();} Multi-Var 
         {
+                std::string str;
                 for (var v : var_list) {
                         if (v.expression_code) {
-                                output(*(v.expression_code));
-                                output(".[]< " + *(v.identifier) + ", " + *(v.expression_temp) + "\n");
+                                str += *(v.expression_code);
+                                str += ".[]< " + *(v.identifier) + ", " + *(v.expression_temp) + "\n";
                                 delete v.expression_code;
                                 delete v.expression_temp;
                         } else {
-                                output(".< " + *(v.identifier) + "\n");
+                                str += ".< " + *(v.identifier) + "\n";
                         }
                         delete v.identifier;
                 }
+                $$.code = new std::string(str);
         }
         | WRITE {var_list.clear();} Multi-Var 
         {
+                std::string str;
                 for (var v : var_list) {
                         if (v.expression_code) {
-                                output(*(v.expression_code));
-                                output(".[]> " + *(v.identifier) + ", " + *(v.expression_temp) + "\n");
+                                str += *(v.expression_code);
+                                str += ".[]> " + *(v.identifier) + ", " + *(v.expression_temp) + "\n";
                                 delete v.expression_code;
                                 delete v.expression_temp;
                         } else {
-                                output(".> " + *(v.identifier) + "\n");
+                                str += ".> " + *(v.identifier) + "\n";
                         }
                         delete v.identifier;
                 }
+                $$.code = new std::string(str);
         }
         | CONTINUE 
         {
@@ -329,10 +361,12 @@ Statement: Var ASSIGN Expression
         }
         | RETURN Expression 
         {
-                output(*($2.code));
-                output("ret " + *($2.temp) + "\n");
+                std::string str;
+                str += *($2.code);
+                str += "ret " + *($2.temp) + "\n";
                 delete $2.code;
                 delete $2.temp;
+                $$.code = new std::string(str);
         }
         ;
 
