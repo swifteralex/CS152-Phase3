@@ -286,9 +286,19 @@ Statement: Var ASSIGN Expression
         {      
                 printf("Statement -> DO BEGINLOOP Multi-Statement ENDLOOP WHILE Bool-Expr\n");
         }
-        | READ Multi-Var 
+        | READ {var_list.clear();} Multi-Var 
         {
-                printf("Statement -> READ Multi-Var\n");
+                for (var v : var_list) {
+                        if (v.expression_code) {
+                                output(*(v.expression_code));
+                                output(".[]< " + *(v.identifier) + ", " + *(v.expression_temp) + "\n");
+                                delete v.expression_code;
+                                delete v.expression_temp;
+                        } else {
+                                output(".< " + *(v.identifier) + "\n");
+                        }
+                        delete v.identifier;
+                }
         }
         | WRITE {var_list.clear();} Multi-Var 
         {
