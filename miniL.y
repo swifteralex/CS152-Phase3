@@ -14,6 +14,7 @@
   std::ofstream out;
   void yyerror(const char *msg);
   int temp_counter = 0;
+  int label_counter = 0;
 
   ////// Global variables used for inheritance or non-trivial synthesis //////
   bool identifiers_are_params;
@@ -106,6 +107,10 @@
   std::string get_next_temp() {
     return "temp" + std::to_string(++temp_counter);
   }
+
+  std::string get_next_label() {
+    return "label" + std::to_string(++label_counter);
+  }
 %}
 
 %union{
@@ -148,6 +153,10 @@
 %type <expression_data> Expression
 %type <expression_data> Multiplicative-Expr
 %type <expression_data> Term
+%type <expression_data> Bool-Expr
+%type <expression_data> Relation-Expr
+%type <numval> Comp
+%type <expression_data> Relation-And-Expr
 
 %% 
 
@@ -329,69 +338,143 @@ Statement: Var ASSIGN Expression
 
 Bool-Expr: Relation-And-Expr 
         {
-                printf("Bool-Expr -> Relation-And-Expr\n");
+                $$.code = $1.code;
+                $$.temp = $1.temp;
         }
-        | Relation-And-Expr OR Bool-Expr 
+        | Bool-Expr OR Relation-And-Expr
         {
-                printf("Bool-Expr -> Relation-And-Expr OR Bool-Expr\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += ". " + temp + "\n";
+                str += "|| " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         ;
 
 Relation-And-Expr: Relation-Expr 
         {
-                printf("Relation-And-Expr -> Relation-Expr\n");
+                $$.code = $1.code;
+                $$.temp = $1.temp;
         }
-        | Relation-Expr AND Relation-And-Expr 
+        | Relation-And-Expr AND Relation-Expr 
         {
-                printf("Relation-And-Expr -> Relation-Expr AND Relation-And-Expr\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += ". " + temp + "\n";
+                str += "&& " + temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;
         }
         ;
 
 Relation-Expr: Expression Comp Expression 
         {
-                printf("Relation-Expr -> Expression Comp Expression\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($1.code);
+                str += *($3.code);
+                str += ". " + temp + "\n";
+                switch ($2) {
+                        case 0:
+                                str += "== ";
+                                break;
+                        case 1:
+                                str += "!= ";
+                                break;
+                        case 2:
+                                str += "< ";
+                                break;
+                        case 3:
+                                str += "> ";
+                                break;
+                        case 4:
+                                str += "<= ";
+                                break;
+                        case 5:
+                                str += ">= ";
+                                break;
+                }
+                str += temp + ", " + *($1.temp) + ", " + *($3.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $1.code;
+                delete $1.temp;
+                delete $3.code;
+                delete $3.temp;  
         }
         | TRUE 
         {
-                printf("Relation-Expr -> TRUE\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += ". " + temp + "\n";
+                str += "= " + temp + "1" + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
         }
         | FALSE 
         {
-                printf("Relation-Expr -> FALSE\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += ". " + temp + "\n";
+                str += "= " + temp + "0" + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
         }
         | L_PAREN Bool-Expr R_PAREN 
         {
-                printf("Relation-Expr -> L_PAREN Bool-Expr R_PAREN\n");
+                $$.code = $2.code;
+                $$.temp = $2.temp;
         }
         | NOT Relation-Expr
         {
-                printf("Relation-Expr -> NOT Relation-Expr\n");
+                std::string str;
+                std::string temp = get_next_temp();
+                str += *($2.code);
+                str += ". " + temp + "\n";
+                str += "! " + temp + *($2.temp) + "\n";
+                $$.code = new std::string(str);
+                $$.temp = new std::string(temp);
+                delete $2.code;
+                delete $2.temp;
         }
         ;
 
 Comp: EQ 
         {
-                printf("Comp -> EQ\n");
+                $$ = 0;
         }
         | NEQ 
         {
-                printf("Comp -> NEQ\n");
+                $$ = 1;
         }
         | LT 
         {
-                printf("Comp -> LT\n");
+                $$ = 2;
         } 
         | GT 
         {
-                printf("Comp -> GT\n");
+                $$ = 3;
         }
         | LTE 
         {
-                printf("Comp -> LTE\n");
+                $$ = 4;
         }
         | GTE 
         {
-                printf("Comp -> GTE\n");
+                $$ = 5;
         }
         ;
 
