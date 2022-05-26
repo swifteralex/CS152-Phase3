@@ -17,6 +17,7 @@
 
   ////// Global variables used for inheritance or non-trivial synthesis //////
   bool identifiers_are_params;
+  int param_count;
   std::vector<std::string> identifier_list;
   struct expression {
     std::string* code;
@@ -170,33 +171,7 @@ Multi-Ident: Multi-Ident COMMA IDENT
         }
         ;
 
-Multi-Declaration: Multi-Declaration {identifier_list.clear();} Multi-Ident COLON ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
-        { 
-                // TODO
-        }
-        | Multi-Declaration Multi-Ident COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER SEMICOLON
-        { 
-                for (int i = 0; i < identifier_list.size(); i++) {
-                        std::string identifier = identifier_list[i];
-                        add_variable_to_symbol_table(identifier, Array);
-                        output(".[] " + identifier + ", " + std::to_string($6) + "\n");
-                }
-        }
-        | Multi-Declaration Multi-Ident COLON INTEGER SEMICOLON
-        { 
-                for (int i = 0; i < identifier_list.size(); i++) {
-                        std::string identifier = identifier_list[i];
-                        add_variable_to_symbol_table(identifier, Integer);
-                        output(". " + identifier + "\n");
-                        if (identifiers_are_params) { 
-                                output("= " + identifier + ", $" + std::to_string(i) + "\n");
-                        }
-                }
-        }
-        | /*epsilon*/
-        { 
-                printf("Multi-Declaration -> epsilon\n");
-        }
+Declaration-Helper: Multi-Declaration {identifier_list.clear();} Multi-Ident COLON
         ;
 
 Function: FUNCTION IDENT 
@@ -206,6 +181,7 @@ Function: FUNCTION IDENT
         SEMICOLON BEGIN_PARAMS 
         {
                 identifiers_are_params = true;
+                param_count = 0;
         }
         Multi-Declaration END_PARAMS BEGIN_LOCALS 
         {
@@ -214,6 +190,34 @@ Function: FUNCTION IDENT
         Multi-Declaration END_LOCALS BEGIN_BODY Multi-Statement END_BODY 
         { 
                 output("endfunc\n\n"); 
+        }
+        ;
+
+Multi-Declaration: Declaration-Helper ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
+        { 
+                // TODO
+        }
+        | Declaration-Helper ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER SEMICOLON
+        { 
+                for (int i = 0; i < identifier_list.size(); i++) {
+                        std::string identifier = identifier_list[i];
+                        add_variable_to_symbol_table(identifier, Array);
+                        output(".[] " + identifier + ", " + std::to_string($4) + "\n");
+                }
+        }
+        | Declaration-Helper INTEGER SEMICOLON
+        { 
+                for (std::string identifier : identifier_list) {
+                        add_variable_to_symbol_table(identifier, Integer);
+                        output(". " + identifier + "\n");
+                        if (identifiers_are_params) { 
+                                output("= " + identifier + ", $" + std::to_string(param_count++) + "\n");
+                        }
+                }
+        }
+        | /*epsilon*/
+        { 
+                printf("Multi-Declaration -> epsilon\n");
         }
         ;
 
