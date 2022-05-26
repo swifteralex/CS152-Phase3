@@ -591,13 +591,14 @@ Term: Var
         }
         | IDENT L_PAREN R_PAREN 
         {
-                std::string str = $1;
-                trim_identifier(str);
+                std::string str;
+                std::string str2 = $1;
+                trim_identifier(str2);
                 std::string temp = get_next_temp();
                 str += ". " + temp + "\n";
-                str += "call " + str + ", " + temp + "\n";
+                str += "call " + str2 + ", " + temp + "\n";
                 $$.code = new std::string(str);
-                $$.temp = new std::string(temp); 
+                $$.temp = new std::string(temp);
         }
         ;
 
