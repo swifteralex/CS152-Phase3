@@ -6,6 +6,7 @@
   #include <string.h>
   #include <iostream>
   #include <fstream>
+  #include <stack>
 
   extern int currLine;
   extern int currPos;
@@ -31,14 +32,15 @@
     std::string* expression_temp;
   };
   std::vector<var> var_list;
-  std::vector<std::string*> statement_list;
+  std::stack<std::vector<std::string*>> statement_list;
   std::string* read_statement_list() {
     std::string str;
-    for (std::string* statement : statement_list) {
+    std::vector<std::string*> top = statement_list.top();
+    for (std::string* statement : top) {
       str += (*statement);
       delete statement;
     }
-    statement_list.clear();
+    statement_list.pop();
     return new std::string(str);
   }
   ////////////////////////////////////////////////////////////////////////////
@@ -210,10 +212,10 @@ Function: FUNCTION IDENT
         {
                 identifiers_are_params = false;
         }
-        Multi-Declaration END_LOCALS BEGIN_BODY Multi-Statement {$14.code = read_statement_list();} END_BODY 
+        Multi-Declaration END_LOCALS BEGIN_BODY {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$15.code = read_statement_list();} END_BODY 
         { 
-                output(*($14.code));
-                delete $14.code;
+                output(*($15.code));
+                delete $15.code;
                 std::string str = $2;
                 trim_identifier(str);
                 if (str != "main") {
@@ -273,18 +275,18 @@ Multi-Var: Multi-Var COMMA Var
 
 Multi-Statement: Multi-Statement Statement SEMICOLON
         {
-                statement_list.push_back($2.code);
+                statement_list.top().push_back($2.code);
         }
         | Statement SEMICOLON 
         {
-                statement_list.push_back($1.code);
+                statement_list.top().push_back($1.code);
         }
         ;
 
-If-Helper: IF Bool-Expr THEN Multi-Statement 
+If-Helper: IF Bool-Expr THEN {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement 
         {
-                $4.code = read_statement_list();
-                $$.statement_code = $4.code;
+                $5.code = read_statement_list();
+                $$.statement_code = $5.code;
                 $$.expression_code = $2.code;
                 $$.expression_temp = $2.temp;
         }
@@ -309,17 +311,46 @@ Statement: Var ASSIGN Expression
         }
         | If-Helper ENDIF 
         {
-                printf("Statement -> IF Bool-Expr THEN Multi-Statement ENDIF\n");
+                std::string str;
+                std::string true_label = get_next_label();
+                std::string false_label = get_next_label();
+                str += *($1.expression_code);
+                str += "?:= " + true_label + ", " + *($1.expression_temp) + "\n";
+                str += ":= " + false_label + "\n";
+                str += ": " + true_label + "\n";
+                str += *($1.statement_code);
+                str += ": " + false_label + "\n";
+                $$.code = new std::string(str);
+                delete $1.statement_code;
+                delete $1.expression_code;
+                delete $1.expression_temp;
         }
-        | If-Helper ELSE Multi-Statement {$3.code = read_statement_list();} ENDIF 
+        | If-Helper ELSE {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$4.code = read_statement_list();} ENDIF 
         {
-                printf("Statement -> IF Bool-Expr THEN Multi-Statement ELSE Multi-Statement ENDIF\n");
+                std::string str;
+                std::string true_label = get_next_label();
+                std::string false_label = get_next_label();
+                std::string end_label = get_next_label();
+                str += *($1.expression_code);
+                str += "?:= " + true_label + ", " + *($1.expression_temp) + "\n";
+                str += ":= " + false_label + "\n";
+                str += ": " + true_label + "\n";
+                str += *($1.statement_code);
+                str += ":= " + end_label + "\n";
+                str += ": " + false_label + "\n";
+                str += *($4.code);
+                str += ": " + end_label + "\n";
+                $$.code = new std::string(str);
+                delete $1.statement_code;
+                delete $1.expression_code;
+                delete $1.expression_temp;
+                delete $4.code;
         }
-        | WHILE Bool-Expr BEGINLOOP Multi-Statement {$4.code = read_statement_list();} ENDLOOP 
+        | WHILE Bool-Expr BEGINLOOP {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$5.code = read_statement_list();} ENDLOOP 
         {
                 printf("Statement -> WHILE Bool-Expr BEGINLOOP Multi-Statement ENDLOOP\n");
         }
-        | DO BEGINLOOP Multi-Statement {$3.code = read_statement_list();} ENDLOOP WHILE Bool-Expr 
+        | DO BEGINLOOP {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$4.code = read_statement_list();} ENDLOOP WHILE Bool-Expr 
         {      
                 printf("Statement -> DO BEGINLOOP Multi-Statement ENDLOOP WHILE Bool-Expr\n");
         }
