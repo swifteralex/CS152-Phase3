@@ -171,12 +171,11 @@ Multi-Ident: Multi-Ident COMMA IDENT
         }
         ;
 
-Declaration-Helper: Multi-Declaration {identifier_list.clear();} Multi-Ident COLON
-        ;
-
 Function: FUNCTION IDENT 
         {
-                std::string str = $2; add_function_to_symbol_table(str); output("func " + str + "\n"); print_symbol_table();
+                std::string str = $2; 
+                add_function_to_symbol_table(str); 
+                output("func " + str + "\n"); 
         } 
         SEMICOLON BEGIN_PARAMS 
         {
@@ -189,8 +188,16 @@ Function: FUNCTION IDENT
         }
         Multi-Declaration END_LOCALS BEGIN_BODY Multi-Statement END_BODY 
         { 
+                std::string str = $2;
+                trim_identifier(str);
+                if (str != "main") {
+                        output("ret 0\n");
+                }
                 output("endfunc\n\n"); 
         }
+        ;
+
+Declaration-Helper: Multi-Declaration {identifier_list.clear();} Multi-Ident COLON
         ;
 
 Multi-Declaration: Declaration-Helper ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
@@ -199,8 +206,7 @@ Multi-Declaration: Declaration-Helper ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
         }
         | Declaration-Helper ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER SEMICOLON
         { 
-                for (int i = 0; i < identifier_list.size(); i++) {
-                        std::string identifier = identifier_list[i];
+                for (std::string identifier : identifier_list) {
                         add_variable_to_symbol_table(identifier, Array);
                         output(".[] " + identifier + ", " + std::to_string($4) + "\n");
                 }
@@ -304,7 +310,10 @@ Statement: Var ASSIGN Expression
         }
         | RETURN Expression 
         {
-                printf("Statement -> RETURN Expression\n");
+                output(*($2.code));
+                output("ret " + *($2.temp) + "\n");
+                delete $2.code;
+                delete $2.temp;
         }
         ;
 
