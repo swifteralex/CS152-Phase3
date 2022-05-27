@@ -43,6 +43,7 @@
     statement_list.pop();
     return new std::string(str);
   }
+  std::stack<std::string> loop_begin_labels;
   ////////////////////////////////////////////////////////////////////////////
   
   enum Type { Integer, Array };
@@ -203,15 +204,7 @@ Function: FUNCTION IDENT
                 add_function_to_symbol_table(str); 
                 output("func " + str + "\n"); 
         } 
-        SEMICOLON BEGIN_PARAMS 
-        {
-                identifiers_are_params = true;
-                param_count = 0;
-        }
-        Multi-Declaration END_PARAMS BEGIN_LOCALS 
-        {
-                identifiers_are_params = false;
-        }
+        SEMICOLON BEGIN_PARAMS {identifiers_are_params = true; param_count = 0;} Multi-Declaration END_PARAMS BEGIN_LOCALS {identifiers_are_params = false;}
         Multi-Declaration END_LOCALS BEGIN_BODY {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$15.code = read_statement_list();} END_BODY 
         { 
                 output(*($15.code));
@@ -250,9 +243,6 @@ Multi-Declaration: Declaration-Helper ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
                 }
         }
         | /*epsilon*/
-        { 
-                printf("Multi-Declaration -> epsilon\n");
-        }
         ;
 
 Multi-Var: Multi-Var COMMA Var
@@ -346,13 +336,41 @@ Statement: Var ASSIGN Expression
                 delete $1.expression_temp;
                 delete $4.code;
         }
-        | WHILE Bool-Expr BEGINLOOP {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$5.code = read_statement_list();} ENDLOOP 
+        | WHILE Bool-Expr BEGINLOOP {std::vector<std::string*> list; statement_list.push(list); loop_begin_labels.push(get_next_label());} Multi-Statement {$5.code = read_statement_list();} ENDLOOP 
         {
-                printf("Statement -> WHILE Bool-Expr BEGINLOOP Multi-Statement ENDLOOP\n");
+                std::string str;
+                std::string end_label = get_next_label();
+                std::string true_label = get_next_label();
+                std::string begin_label = loop_begin_labels.top();
+                loop_begin_labels.pop();
+                str += ": " + begin_label + "\n";
+                str += *($2.code);
+                str += "?:= " + true_label + ", " + *($2.temp) + "\n";
+                str += ":= " + end_label + "\n";
+                str += ": " + true_label + "\n";
+                str += *($5.code);
+                str += ":= " + begin_label + "\n";
+                str += ": " + end_label + "\n";
+                $$.code = new std::string(str);
+                delete $2.code;
+                delete $2.temp;
+                delete $5.code;
         }
-        | DO BEGINLOOP {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$4.code = read_statement_list();} ENDLOOP WHILE Bool-Expr 
-        {      
-                printf("Statement -> DO BEGINLOOP Multi-Statement ENDLOOP WHILE Bool-Expr\n");
+        | DO BEGINLOOP {std::vector<std::string*> list; statement_list.push(list); loop_begin_labels.push(get_next_label());} Multi-Statement {$4.code = read_statement_list();} ENDLOOP WHILE Bool-Expr 
+        {
+                std::string str;
+                std::string begin_label = get_next_label();
+                std::string continue_label = loop_begin_labels.top();
+                loop_begin_labels.pop();
+                str += ": " + begin_label + "\n";
+                str += *($4.code);
+                str += ": " + continue_label + "\n";
+                str += *($8.code);
+                str += "?:= " + begin_label + ", " + *($8.temp) + "\n";
+                $$.code = new std::string(str);
+                delete $8.code;
+                delete $8.temp;
+                delete $4.code;
         }
         | READ {var_list.clear();} Multi-Var 
         {
@@ -388,7 +406,10 @@ Statement: Var ASSIGN Expression
         }
         | CONTINUE 
         {
-                printf("Statement -> CONTINUE\n");
+                std::string str;
+                std::string begin_label = loop_begin_labels.top();
+                str += ":= " + begin_label + "\n";
+                $$.code = new std::string(str);
         }
         | RETURN Expression 
         {
@@ -485,7 +506,7 @@ Relation-Expr: Expression Comp Expression
                 std::string str;
                 std::string temp = get_next_temp();
                 str += ". " + temp + "\n";
-                str += "= " + temp + "1" + "\n";
+                str += "= " + temp + ", 1" + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
         }
@@ -494,7 +515,7 @@ Relation-Expr: Expression Comp Expression
                 std::string str;
                 std::string temp = get_next_temp();
                 str += ". " + temp + "\n";
-                str += "= " + temp + "0" + "\n";
+                str += "= " + temp + ", 0" + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
         }
@@ -509,7 +530,7 @@ Relation-Expr: Expression Comp Expression
                 std::string temp = get_next_temp();
                 str += *($2.code);
                 str += ". " + temp + "\n";
-                str += "! " + temp + *($2.temp) + "\n";
+                str += "! " + temp + ", " + *($2.temp) + "\n";
                 $$.code = new std::string(str);
                 $$.temp = new std::string(temp);
                 delete $2.code;
