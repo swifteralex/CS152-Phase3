@@ -46,6 +46,9 @@
   std::stack<std::string> loop_begin_labels;
   ////////////////////////////////////////////////////////////////////////////
   
+  bool found_errors = false;
+  std::string program_code;
+
   struct Symbol {
     Symbol(std::string identifier, std::string type) : identifier(identifier), type(type) {}
     std::string identifier;
@@ -73,11 +76,6 @@
 
   void add_to_symbol_table(Symbol& value) {
     symbol_table.push_back(value);
-  }
-
-  void output(std::string text) {
-    std::cout << text;
-    out << text;
   }
 
   bool is_valid_identifier_character(char c) {
@@ -164,14 +162,20 @@ Start-Program: Program
                 std::string str = "main";
                 if (!find_symbol(str)) {
                         printf("Error: no main function defined\n");
-                        exit(1);
+                        found_errors = true;
+                }
+                if (!found_errors) {
+                        std::cout << program_code;
+                        out << program_code;
                 }
         }
         | 
         %empty 
         {
-                output("func main\n");
-                output("endfunc\n");
+                program_code += "func main\n";
+                program_code += "endfunc\n";
+                std::cout << program_code;
+                out << program_code;
         }
         ;
 
@@ -194,19 +198,19 @@ Function: FUNCTION IDENT
                 std::string str = $2; 
                 Symbol s(str, "function");
                 add_to_symbol_table(s); 
-                output("func " + str + "\n"); 
+                program_code += "func " + str + "\n"; 
         } 
         SEMICOLON BEGIN_PARAMS {identifiers_are_params = true; param_count = 0;} Multi-Declaration END_PARAMS BEGIN_LOCALS {identifiers_are_params = false;}
         Multi-Declaration END_LOCALS BEGIN_BODY {std::vector<std::string*> list; statement_list.push(list);} Multi-Statement {$15.code = read_statement_list();} END_BODY 
         { 
-                output(*($15.code));
+                program_code += *($15.code);
                 delete $15.code;
                 std::string str = $2;
                 trim_identifier(str);
                 if (str != "main") {
-                        output("ret 0\n");
+                        program_code += "ret 0\n";
                 }
-                output("endfunc\n\n"); 
+                program_code += "endfunc\n\n"; 
         }
         ;
 
@@ -219,24 +223,24 @@ Multi-Declaration: Declaration-Helper
                         if (identifier == "miniL") {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": can't have variable with same name as program\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         if (find_symbol(identifier)) {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": multiple declarations of variable \"" + identifier + "\"\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         Symbol s(identifier, "integer");
                         add_to_symbol_table(s);
-                        output(". " + identifier + "\n");
+                        program_code += ". " + identifier + "\n";
                 }
         }
         ENUM L_PAREN {identifier_list.clear();} Multi-Ident R_PAREN SEMICOLON
         { 
                 for (int i = 0; i < identifier_list.size(); i++) {
                         std::string identifier = identifier_list[i];
-                        output(". " + identifier + "\n");
-                        output("= " + identifier + ", " + std::to_string(i) + "\n");
+                        program_code += ". " + identifier + "\n";
+                        program_code += "= " + identifier + ", " + std::to_string(i) + "\n";
                 }
         }
         | Declaration-Helper ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER SEMICOLON
@@ -245,21 +249,21 @@ Multi-Declaration: Declaration-Helper
                         if (identifier == "miniL") {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": can't have variable with same name as program\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         if (find_symbol(identifier)) {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": multiple declarations of variable \"" + identifier + "\"\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         if ($4 == 0) {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": cannot have array of size 0\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         Symbol s(identifier, "array");
                         add_to_symbol_table(s);
-                        output(".[] " + identifier + ", " + std::to_string($4) + "\n");
+                        program_code += ".[] " + identifier + ", " + std::to_string($4) + "\n";
                 }
         }
         | Declaration-Helper INTEGER SEMICOLON
@@ -268,18 +272,18 @@ Multi-Declaration: Declaration-Helper
                         if (identifier == "miniL") {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": can't have variable with same name as program\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         if (find_symbol(identifier)) {
                                 std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": multiple declarations of variable \"" + identifier + "\"\n";
                                 printf(error.c_str());
-                                exit(1);
+                                found_errors = true;
                         }
                         Symbol s(identifier, "integer");
                         add_to_symbol_table(s);
-                        output(". " + identifier + "\n");
+                        program_code += ". " + identifier + "\n";
                         if (identifiers_are_params) { 
-                                output("= " + identifier + ", $" + std::to_string(param_count++) + "\n");
+                                program_code += "= " + identifier + ", $" + std::to_string(param_count++) + "\n";
                         }
                 }
         }
@@ -450,12 +454,14 @@ Statement: Var ASSIGN Expression
                 if (loop_begin_labels.size() == 0) {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": use of \"continue\" while outside a loop\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
+                        $$.code = new std::string;
+                } else {
+                        std::string str;
+                        std::string begin_label = loop_begin_labels.top();
+                        str += ":= " + begin_label + "\n";
+                        $$.code = new std::string(str);
                 }
-                std::string str;
-                std::string begin_label = loop_begin_labels.top();
-                str += ":= " + begin_label + "\n";
-                $$.code = new std::string(str);
         }
         | RETURN Expression 
         {
@@ -811,7 +817,7 @@ Term: Var
                 if (!find_symbol(str2)) {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": use of undeclared function \"" + str2 + "\"\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
                 }
                 std::string temp = get_next_temp();
                 str += ". " + temp + "\n";
@@ -827,7 +833,7 @@ Term: Var
                 if (!find_symbol(str2)) {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": use of undeclared function \"" + str2 + "\"\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
                 }
                 std::string temp = get_next_temp();
                 str += ". " + temp + "\n";
@@ -844,12 +850,12 @@ Var: IDENT
                 if (!find_symbol(str)) {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": use of undeclared variable \"" + str + "\"\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
                 }
                 if (find_symbol_type(str) == "array") {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": array variable \"" + str + "\" used without index\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
                 }
                 $$.identifier = new std::string;
                 *($$.identifier) = str;
@@ -863,12 +869,12 @@ Var: IDENT
                 if (!find_symbol(str)) {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": use of undeclared variable \"" + str + "\"\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
                 }
                 if (find_symbol_type(str) == "integer") {
                         std::string error = "Error at line " + std::to_string(currLine) + ", column " + std::to_string(currPos) + ": attempt to index integer variable \"" + str + "\"\n";
                         printf(error.c_str());
-                        exit(1);
+                        found_errors = true;
                 }
                 $$.identifier = new std::string;
                 *($$.identifier) = str;
