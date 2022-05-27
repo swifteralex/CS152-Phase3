@@ -221,9 +221,20 @@ Function: FUNCTION IDENT
 Declaration-Helper: Multi-Declaration {identifier_list.clear();} Multi-Ident COLON
         ;
 
-Multi-Declaration: Declaration-Helper ENUM L_PAREN Multi-Ident R_PAREN SEMICOLON
+Multi-Declaration: Declaration-Helper 
+        {
+                for (std::string identifier : identifier_list) {
+                        add_variable_to_symbol_table(identifier, Integer);
+                        output(". " + identifier + "\n");
+                }
+        }
+        ENUM L_PAREN {identifier_list.clear();} Multi-Ident R_PAREN SEMICOLON
         { 
-                // TODO
+                for (int i = 0; i < identifier_list.size(); i++) {
+                        std::string identifier = identifier_list[i];
+                        output(". " + identifier + "\n");
+                        output("= " + identifier + ", " + std::to_string(i) + "\n");
+                }
         }
         | Declaration-Helper ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER SEMICOLON
         { 
